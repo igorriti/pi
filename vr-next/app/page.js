@@ -1,11 +1,11 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+"use client"
+import { useState, useEffect, useRef } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import axios from 'axios';
 import * as THREE from 'three';
 import FileUpload from '@/components/FileUpload';
+import YouTube from 'react-youtube';
 
 const ImageSphere = ({ textureUrl }) => {
   const texture = useLoader(THREE.TextureLoader, textureUrl);
@@ -22,30 +22,45 @@ const Home = () => {
   const [chapterDescriptions, setChapterDescriptions] = useState([]);
   const [currentChapter, setCurrentChapter] = useState(0);
   const [images, setImages] = useState([]);
+  const [youtubeIds, setYoutubeIds] = useState([]);
   const [viewMode, setViewMode] = useState('Menu');
   const [customText, setCustomText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [volume, setVolume] = useState(50);
+  const videoRef = useRef(null);
   const defaultImage = '/default.png'; // Path to the default 360 image
 
   useEffect(() => {
     if (viewMode === 'Story' && chapterDescriptions.length > 0) {
-      loadImage(currentChapter);
-      loadImage(currentChapter + 1); // Preload next chapter
+      loadAllImages();
     }
-  }, [chapterDescriptions, currentChapter, viewMode]);
+  }, [chapterDescriptions, viewMode]);
 
-  const loadImage = async (chapter) => {
-    if (chapter < chapterDescriptions.length && !images[chapter]) {
-      setIsLoading(true);
-      const prompt = viewMode === 'Story' ? chapterDescriptions[chapter] : customText;
-      const response = await axios.post('/api/prediction', { prompt });
-      setImages((prev) => {
-        const newImages = [...prev];
-        newImages[chapter] = response.data[0];
-        return newImages;
-      });
-      setIsLoading(false);
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.internalPlayer.setVolume(volume);
     }
+  }, [volume]);
+
+  useEffect(() => {
+    if (youtubeIds.length > 0 && youtubeIds[currentChapter] && videoRef.current) {
+      videoRef.current.internalPlayer.loadVideoById(youtubeIds[currentChapter]);
+    }
+  }, [currentChapter, youtubeIds]);
+
+  const loadAllImages = async () => {
+    setIsLoading(true);
+    const loadedImages = [];
+    const loadedYoutubeIds = [];
+    for (let i = 0; i < chapterDescriptions.length; i++) {
+      const prompt = chapterDescriptions[i];
+      const response = await axios.post('/api/prediction', { prompt });
+      loadedImages.push(response.data.image);
+      loadedYoutubeIds.push(response.data.id || null);
+    }
+    setImages(loadedImages);
+    setYoutubeIds(loadedYoutubeIds);
+    setIsLoading(false);
   };
 
   const handlePreviousChapter = () => {
@@ -63,7 +78,9 @@ const Home = () => {
   const handleGenerateCustomImage = async () => {
     setIsLoading(true);
     const response = await axios.post('/api/prediction', { prompt: customText });
-    setImages([response.data[0]]);
+    console.log(response);
+    setImages([response.data.image[0]]);
+    setYoutubeIds([response.data.id || null]);
     setIsLoading(false);
   };
 
@@ -156,6 +173,34 @@ const Home = () => {
           <div className="text-white text-2xl">Loading...</div>
         </div>
       )}
+      {youtubeIds[currentChapter] && (
+        <YouTube
+          videoId={youtubeIds[currentChapter]}
+          ref={videoRef}
+          opts={{
+            height: '0',
+            width: '0',
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+            },
+          }}
+        />
+      )}
+      <div className="absolute top-4 right-4 bg-white bg-opacity-10 p-4 rounded-lg backdrop-blur-md shadow-lg">
+        <label htmlFor="volume" className="text-white">
+          Volume
+        </label>
+        <input
+          id="volume"
+          type="range"
+          min="0"
+          max="100"
+          value={volume}
+          onChange={(e) => setVolume(e.target.value)}
+          className="w-full"
+        />
+      </div>
     </div>
   );
 };
