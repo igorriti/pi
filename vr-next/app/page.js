@@ -1,7 +1,7 @@
 "use client"
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Canvas, useLoader, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Points, PointMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import axios from 'axios';
 import YouTube from 'react-youtube';
@@ -10,7 +10,6 @@ import WelcomeScreen from '@/components/WelcomeScreen';
 import Settings from '@/components/Settings';
 import StartMenu from '@/components/StartMenu';
 import gsap from 'gsap';
-
 
 const ImageSphere = ({ textureUrl, visible }) => {
   const [opacity, setOpacity] = useState(0);
@@ -21,7 +20,7 @@ const ImageSphere = ({ textureUrl, visible }) => {
     if (visible) {
       gsap.to(materialRef.current, {
         opacity: 1,
-        duration: 7,
+        duration: 5,
         ease: "power2.inOut"
       });
     }
@@ -32,6 +31,54 @@ const ImageSphere = ({ textureUrl, visible }) => {
       <sphereGeometry args={[500, 60, 40]} />
       <meshBasicMaterial ref={materialRef} side={THREE.BackSide} map={texture} transparent opacity={opacity} />
     </mesh>
+  );
+};
+
+const ParticleEffect = ({ count = 5000, visible }) => {
+  const points = useRef();
+  const [opacity, setOpacity] = useState(1);
+  
+  const positions = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const theta = THREE.MathUtils.randFloatSpread(360); 
+      const phi = THREE.MathUtils.randFloatSpread(360); 
+      positions[i * 3] = 5 * Math.sin(theta) * Math.cos(phi);
+      positions[i * 3 + 1] = 5 * Math.sin(theta) * Math.sin(phi);
+      positions[i * 3 + 2] = 5 * Math.cos(theta);
+    }
+    return positions;
+  }, [count]);
+
+  useFrame((state, delta) => {
+    if (points.current) {
+      points.current.rotation.x -= delta / 10;
+      points.current.rotation.y -= delta / 15;
+    }
+  });
+
+  useEffect(() => {
+    if (!visible) {
+      gsap.to(points.current.material, {
+        opacity: 0,
+        duration: 2,
+        ease: "power2.inOut",
+        onComplete: () => setOpacity(0)
+      });
+    }
+  }, [visible]);
+
+  return (
+    <Points ref={points} positions={positions} stride={3} frustumCulled={false} visible={opacity > 0}>
+      <PointMaterial
+        transparent
+        color="#aaaaff"
+        size={0.05}
+        sizeAttenuation={true}
+        depthWrite={false}
+        opacity={opacity}
+      />
+    </Points>
   );
 };
 
@@ -61,22 +108,27 @@ const Home = () => {
     }
   }, []);
 
-  const handleStart = () => {
+  const handleStart = useCallback(() => {
     const hasVisited = localStorage.getItem('hasVisited');
 
     const audio = new Audio('/sounds/welcome1.mp3');
     audio.play();
-    setShowStartMenu(false);
-    if (hasVisited) {
-      setSphereVisible(true);
-    } else {
-      setShowWelcome(true);
-    }
-  };
-
-  const handleParticleTransitionComplete = () => {
-
-  };
+    
+    // Animate particles disappearance
+    setParticlesVisible(false);
+    
+    // The StartMenu component will now handle its own animation
+    // and call this function when the animation is complete
+    setTimeout(() => {
+      setShowStartMenu(false);
+      
+      if (hasVisited) {
+        setSphereVisible(true);
+      } else {
+        setShowWelcome(true);
+      }
+    }, 1500); // Match the duration of the StartMenu GSAP animation
+  }, []);
 
   const handleWelcomeComplete = (preferences) => {
     setUserPreferences(preferences);
@@ -214,9 +266,10 @@ const Home = () => {
           dampingFactor={0.05}
           rotateSpeed={0.5}
         />
+        <ParticleEffect visible={particlesVisible} />
         {!showStartMenu && <ImageSphere textureUrl={images[currentChapter] || defaultImage} visible={sphereVisible} />}
       </Canvas>
-      {showStartMenu && <StartMenu onStart={handleStart} />}
+      {showStartMenu && <StartMenu onStart={handleStart} visible={showStartMenu} />}
       {showWelcome && (
         <WelcomeScreen
           onComplete={handleWelcomeComplete}
