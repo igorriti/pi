@@ -15,14 +15,19 @@ const openai = new OpenAI({
 const pc = new Pinecone();  // No need to pass the apiKey directly if it's in the environment variable
 
 export async function POST(request) {
-    const { prompt } = await request.json();
+    const { prompt, userPreferences, improvePrompt } = await request.json();
+
+    let enhancedPrompt = prompt;
+    if (improvePrompt) {
+        enhancedPrompt = await improvePromptWithPreferences(prompt, userPreferences);
+    }
 
     // Generate the image using Replicate
     let response = await replicate.run(
         "lucataco/sdxl-panoramic:76acc4075d0633dcb3823c1fed0419de21d42001b65c816c7b5b9beff30ec8cd",
         {
             input: {
-                prompt
+                prompt: enhancedPrompt
             }
         }
     );
@@ -56,4 +61,26 @@ export async function POST(request) {
 
     // Return the generated image URL and YouTube ID in the response
     return NextResponse.json({ image: response, id: youtubeId });
+}
+
+async function improvePromptWithPreferences(prompt, userPreferences) {
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+            {
+                role: "system",
+                content: `You are an AI assistant that improves image generation prompts. 
+                          The user has the following preferences:
+                          Style: ${userPreferences.style}
+                          Things to avoid: ${userPreferences.avoid.join(', ')}
+                          Enhance the given prompt to reflect these preferences without changing its core meaning.`
+            },
+            {
+                role: "user",
+                content: `Improve this prompt: ${prompt}`
+            }
+        ]
+    });
+
+    return response.choices[0].message.content;
 }

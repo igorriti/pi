@@ -1,24 +1,44 @@
 "use client"
 import { useState, useEffect, useRef } from 'react';
-import { Canvas, useLoader } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
-import axios from 'axios';
+import { Canvas, useLoader, useFrame } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import FileUpload from '@/components/FileUpload';
+import axios from 'axios';
 import YouTube from 'react-youtube';
+import FileUpload from '@/components/FileUpload';
+import WelcomeScreen from '@/components/WelcomeScreen';
+import Settings from '@/components/Settings';
+import StartMenu from '@/components/StartMenu';
+import gsap from 'gsap';
 
-const ImageSphere = ({ textureUrl }) => {
+
+const ImageSphere = ({ textureUrl, visible }) => {
+  const [opacity, setOpacity] = useState(0);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
+  const materialRef = useRef();
+
+  useEffect(() => {
+    if (visible) {
+      gsap.to(materialRef.current, {
+        opacity: 1,
+        duration: 7,
+        ease: "power2.inOut"
+      });
+    }
+  }, [visible]);
 
   return (
-    <mesh>
+    <mesh visible={visible}>
       <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial side={THREE.BackSide} map={texture} />
+      <meshBasicMaterial ref={materialRef} side={THREE.BackSide} map={texture} transparent opacity={opacity} />
     </mesh>
   );
 };
 
 const Home = () => {
+  const [showStartMenu, setShowStartMenu] = useState(true);
+  const [sphereVisible, setSphereVisible] = useState(false);
+  const [particlesVisible, setParticlesVisible] = useState(true);
   const [chapterDescriptions, setChapterDescriptions] = useState([]);
   const [currentChapter, setCurrentChapter] = useState(0);
   const [images, setImages] = useState([]);
@@ -27,47 +47,57 @@ const Home = () => {
   const [customText, setCustomText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [volume, setVolume] = useState(50);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [userPreferences, setUserPreferences] = useState(null);
+  const [improvePrompt, setImprovePrompt] = useState(true);
   const videoRef = useRef(null);
-  const defaultImage = '/default.png'; // Path to the default 360 image
+  const defaultImage = '/default.png';
 
   useEffect(() => {
-    if (viewMode === 'Story' && chapterDescriptions.length > 0) {
-      loadAllImages();
+    const hasVisited = localStorage.getItem('hasVisited');
+    if (hasVisited) {
+      setShowWelcome(false);
+      setUserPreferences(JSON.parse(localStorage.getItem('userPreferences')));
     }
-  }, [chapterDescriptions, viewMode]);
+  }, []);
 
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.internalPlayer.setVolume(volume);
-    }
-  }, [volume]);
+  const handleStart = () => {
+    const hasVisited = localStorage.getItem('hasVisited');
 
-  useEffect(() => {
-    if (youtubeIds.length > 0 && youtubeIds[currentChapter] && videoRef.current) {
-      videoRef.current.internalPlayer.loadVideoById(youtubeIds[currentChapter]);
+    const audio = new Audio('/sounds/welcome1.mp3');
+    audio.play();
+    setShowStartMenu(false);
+    if (hasVisited) {
+      setSphereVisible(true);
+    } else {
+      setShowWelcome(true);
     }
-  }, [currentChapter, youtubeIds]);
+  };
 
-  const loadAllImages = async () => {
-    setIsLoading(true);
-    const loadedImages = [];
-    const loadedYoutubeIds = [];
-    for (let i = 0; i < chapterDescriptions.length; i++) {
-      const prompt = chapterDescriptions[i];
-      const response = await axios.post('/api/prediction', { prompt });
-      loadedImages.push(response.data.image);
-      loadedYoutubeIds.push(response.data.id || null);
-    }
-    setImages(loadedImages);
-    setYoutubeIds(loadedYoutubeIds);
-    setIsLoading(false);
+  const handleParticleTransitionComplete = () => {
+
+  };
+
+  const handleWelcomeComplete = (preferences) => {
+    setUserPreferences(preferences);
+    setShowWelcome(false);
+    setSphereVisible(true);
+    localStorage.setItem('hasVisited', 'true');
+    localStorage.setItem('userPreferences', JSON.stringify(preferences));
+  };
+
+  const playClickSound = () => {
+    const audio = new Audio('/sounds/click.ogg');
+    audio.play();
   };
 
   const handlePreviousChapter = () => {
+    playClickSound();
     setCurrentChapter((prev) => (prev > 0 ? prev - 1 : chapterDescriptions.length - 1));
   };
 
   const handleNextChapter = () => {
+    playClickSound();
     setCurrentChapter((prev) => (prev < chapterDescriptions.length - 1 ? prev + 1 : 0));
   };
 
@@ -76,9 +106,13 @@ const Home = () => {
   };
 
   const handleGenerateCustomImage = async () => {
+    playClickSound();
     setIsLoading(true);
-    const response = await axios.post('/api/prediction', { prompt: customText });
-    console.log(response);
+    const response = await axios.post('/api/prediction', { 
+      prompt: customText,
+      userPreferences,
+      improvePrompt
+    });
     setImages([response.data.image[0]]);
     setYoutubeIds([response.data.id || null]);
     setIsLoading(false);
@@ -87,13 +121,19 @@ const Home = () => {
   const renderMenu = () => (
     <div className="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-md shadow-lg">
       <button
-        onClick={() => setViewMode('Story')}
+        onClick={() => {
+          setViewMode('Story');
+          playClickSound();
+        }}
         className="py-2 px-4 rounded-lg m-1 bg-white bg-opacity-20 hover:bg-opacity-30"
       >
         Story
       </button>
       <button
-        onClick={() => setViewMode('Custom')}
+        onClick={() => {
+          setViewMode('Custom');
+          playClickSound();
+        }}
         className="py-2 px-4 rounded-lg m-1 bg-white bg-opacity-20 hover:bg-opacity-30"
       >
         Custom
@@ -124,7 +164,10 @@ const Home = () => {
         </div>
       )}
       <button
-        onClick={() => setViewMode('Menu')}
+        onClick={() => {
+          setViewMode('Menu');
+          playClickSound();
+        }}
         className="py-2 px-4 rounded-lg m-1 bg-white bg-opacity-20 hover:bg-opacity-30"
       >
         Go Back
@@ -149,7 +192,10 @@ const Home = () => {
         </button>
       </div>
       <button
-        onClick={() => setViewMode('Menu')}
+        onClick={() => {
+          setViewMode('Menu');
+          playClickSound();
+        }}
         className="m-1 py-2 px-4 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30"
       >
         Go Back
@@ -160,47 +206,59 @@ const Home = () => {
   return (
     <div className="h-screen w-screen relative">
       <Canvas>
-        <OrbitControls />
-        <ImageSphere textureUrl={images[currentChapter] || defaultImage} />
+        <PerspectiveCamera makeDefault fov={75} position={[0, 0, 5]} />
+        <OrbitControls
+          minPolarAngle={Math.PI / 4}
+          maxPolarAngle={Math.PI * 5 / 6.5}
+          enableDamping
+          dampingFactor={0.05}
+          rotateSpeed={0.5}
+        />
+        {!showStartMenu && <ImageSphere textureUrl={images[currentChapter] || defaultImage} visible={sphereVisible} />}
       </Canvas>
-      <div className="absolute top-0 left-0 p-4">
-        {viewMode === 'Menu' && renderMenu()}
-        {viewMode === 'Story' && renderStory()}
-        {viewMode === 'Custom' && renderCustom()}
-      </div>
-      {isLoading && (
-        <div className="absolute top-0 left-0 h-full w-full flex items-center justify-center bg-black bg-opacity-50">
-          <div className="text-white text-2xl">Loading...</div>
-        </div>
-      )}
-      {youtubeIds[currentChapter] && (
-        <YouTube
-          videoId={youtubeIds[currentChapter]}
-          ref={videoRef}
-          opts={{
-            height: '0',
-            width: '0',
-            playerVars: {
-              autoplay: 1,
-              controls: 0,
-            },
-          }}
+      {showStartMenu && <StartMenu onStart={handleStart} />}
+      {showWelcome && (
+        <WelcomeScreen
+          onComplete={handleWelcomeComplete}
+          initialPreferences={userPreferences}
         />
       )}
-      <div className="absolute top-4 right-4 bg-white bg-opacity-10 p-4 rounded-lg backdrop-blur-md shadow-lg">
-        <label htmlFor="volume" className="text-white">
-          Volume
-        </label>
-        <input
-          id="volume"
-          type="range"
-          min="0"
-          max="100"
-          value={volume}
-          onChange={(e) => setVolume(e.target.value)}
-          className="w-full"
-        />
-      </div>
+      {!showStartMenu && !showWelcome && (
+        <>
+          <div className="absolute top-0 left-0 p-4">
+            {viewMode === 'Menu' && renderMenu()}
+            {viewMode === 'Story' && renderStory()}
+            {viewMode === 'Custom' && renderCustom()}
+          </div>
+          {isLoading && (
+            <div className="absolute top-0 left-0 h-full w-full flex items-center justify-center bg-black bg-opacity-50">
+              <div className="text-white text-2xl">Loading...</div>
+            </div>
+          )}
+          {youtubeIds[currentChapter] && (
+            <YouTube
+              videoId={youtubeIds[currentChapter]}
+              ref={videoRef}
+              opts={{
+                height: '0',
+                width: '0',
+                playerVars: {
+                  autoplay: 1,
+                  controls: 0,
+                },
+              }}
+            />
+          )}
+          <Settings
+            volume={volume}
+            setVolume={setVolume}
+            userPreferences={userPreferences}
+            setUserPreferences={setUserPreferences}
+            improvePrompt={improvePrompt}
+            setImprovePrompt={setImprovePrompt}
+          />
+        </>
+      )}
     </div>
   );
 };
