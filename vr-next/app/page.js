@@ -1,6 +1,8 @@
 "use client"
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Canvas, useLoader, useFrame } from '@react-three/fiber';
+import { Bloom, BrightnessContrast, EffectComposer, Vignette } from '@react-three/postprocessing'
+import { LensFlare } from '@andersonmancini/lens-flare'
 import { OrbitControls, PerspectiveCamera, Points, PointMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import axios from 'axios';
@@ -106,7 +108,13 @@ const Home = () => {
       setShowWelcome(false);
       setUserPreferences(JSON.parse(localStorage.getItem('userPreferences')));
     }
-  }, []);
+  }, []);+
+
+  useEffect(()=>{
+      if(videoRef.current){
+        videoRef.current.internalPlayer.setVolume(volume);
+      }
+  }, [volume, videoRef.current])
 
   const handleStart = useCallback(() => {
     const hasVisited = localStorage.getItem('hasVisited');
@@ -258,6 +266,14 @@ const Home = () => {
   return (
     <div className="h-screen w-screen relative">
       <Canvas>
+        <EffectComposer multisamplig={false}>
+          {/* <LensFlare 
+              enabled={true}
+              opacity={0.75}
+              position={{x:90,y:86,z:-60}}
+              colorGain={new THREE.Color(52,22,11)}
+          /> */}
+        </EffectComposer>
         <PerspectiveCamera makeDefault fov={75} position={[0, 0, 5]} />
         <OrbitControls
           minPolarAngle={Math.PI / 4}
@@ -299,6 +315,7 @@ const Home = () => {
                   autoplay: 1,
                   controls: 0,
                 },
+                
               }}
             />
           )}

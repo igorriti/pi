@@ -9,11 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@andersonmancini/lens-flare": "^1.0.1",
     "@pinecone-database/pinecone": "^3.0.0",
     "@react-three/drei": "^9.109.2",
     "@react-three/fiber": "^8.16.8",
+    "@react-three/postprocessing": "^2.16.2",
     "axios": "^1.7.2",
     "gsap": "^3.12.5",
+    "jimp": "^1.6.0",
     "next": "14.2.5",
     "openai": "^4.56.0",
     "pdf-parse": "^1.1.1",
@@ -22,6 +25,7 @@
     "react-dom": "^18",
     "react-youtube": "^10.1.0",
     "replicate": "^0.32.0",
+    "sharp": "^0.33.5",
     "three": "^0.167.0"
   },
   "devDependencies": {
